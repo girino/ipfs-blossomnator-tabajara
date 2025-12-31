@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/fiatjaf/eventstore/sqlite3"
 	"github.com/fiatjaf/khatru"
@@ -100,8 +102,13 @@ func main() {
 	// Wrap the relay with middleware to modify blossom responses
 	handler := modifyBlossomResponse(relay, sqlDB, ipfsGatewayURL)
 
+	// Add healthcheck endpoint
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", healthCheckHandler(sqlDB, ipfsShell))
+	mux.Handle("/", handler)
+
 	log.Printf("Running blossom server on :%s", port)
-	if err := http.ListenAndServe(":"+port, handler); err != nil {
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
@@ -532,4 +539,68 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// healthCheckHandler returns a health check endpoint handler
+func healthCheckHandler(db *sql.DB, ipfsShell *shell.Shell) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status := "healthy"
+		statusCode := http.StatusOK
+		checks := make(map[string]interface{})
+
+		// Check database connectivity
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := db.PingContext(ctx); err != nil {
+			status = "unhealthy"
+			statusCode = http.StatusServiceUnavailable
+			checks["database"] = map[string]interface{}{
+				"status": "unhealthy",
+				"error":  err.Error(),
+			}
+		} else {
+			checks["database"] = map[string]interface{}{
+				"status": "healthy",
+			}
+		}
+
+		// Check IPFS connectivity
+		if ipfsShell != nil {
+			if ipfsShell.IsUp() {
+				checks["ipfs"] = map[string]interface{}{
+					"status": "healthy",
+				}
+			} else {
+				status = "unhealthy"
+				statusCode = http.StatusServiceUnavailable
+				checks["ipfs"] = map[string]interface{}{
+					"status": "unhealthy",
+					"error":  "IPFS API is not accessible",
+				}
+			}
+		}
+
+		// Get memory stats
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		checks["memory"] = map[string]interface{}{
+			"alloc_mb":       m.Alloc / 1024 / 1024,
+			"total_alloc_mb": m.TotalAlloc / 1024 / 1024,
+			"sys_mb":         m.Sys / 1024 / 1024,
+			"num_gc":         m.NumGC,
+		}
+
+		// Get goroutine count
+		checks["goroutines"] = runtime.NumGoroutine()
+
+		response := map[string]interface{}{
+			"status":    status,
+			"checks":    checks,
+			"timestamp": time.Now().Unix(),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		json.NewEncoder(w).Encode(response)
+	}
 }

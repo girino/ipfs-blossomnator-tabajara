@@ -3,7 +3,7 @@ version: '3.8'
 services:
   ipfs:
     image: ipfs/kubo:latest
-    container_name: blossom-ipfs
+    container_name: blossom-ipfs-dev
     ports:
       - "4001:4001"  # Swarm
       - "5001:5001"  # API
@@ -12,23 +12,13 @@ services:
       - ./ipfs-data:/data/ipfs
     environment:
       - IPFS_PROFILE=server
-    healthcheck:
-      test: ["CMD", "ipfs", "swarm", "peers"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     restart: unless-stopped
 
   blossom:
-    # Option 1: Build from source (default)
     build:
       context: .
       dockerfile: Dockerfile
-    # Option 2: Use pre-built image from GitHub Container Registry
-    # Uncomment the image line and comment out the build section to use a released version
-    # image: ghcr.io/YOUR_USERNAME/ipfs-blossomnator-tabajara:v1.0.0
-    container_name: blossom-server
+    container_name: blossom-server-dev
     ports:
       - "${PORT:-3334}:${PORT:-3334}"
     volumes:
@@ -39,7 +29,6 @@ services:
       - DATABASE_PATH=/app/data/blossom.db
       - IPFS_GATEWAY_URL=${IPFS_GATEWAY_URL:-https://dweb.link/ipfs/}
     depends_on:
-      ipfs:
-        condition: service_healthy
+      - ipfs
     restart: unless-stopped
 

@@ -19,9 +19,11 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    labels:
+      - "ipfs_blossomnator_tabajara_autoheal=true"
 
   blossom:
-    # Option 1: Build from source (default)
+    # Option 1: Build from source
     build:
       context: .
       dockerfile: Dockerfile
@@ -42,4 +44,26 @@ services:
       ipfs:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider --timeout=5 http://localhost:$${PORT:-3334}/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "ipfs_blossomnator_tabajara_autoheal=true"
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: blossom-autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=ipfs_blossomnator_tabajara_autoheal
+      - CURL_TIMEOUT=30
+      - AUTOHEAL_INTERVAL=5
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - ipfs
+      - blossom
 

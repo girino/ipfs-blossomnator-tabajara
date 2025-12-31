@@ -21,8 +21,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o blossom-server main.go
 # Runtime stage
 FROM alpine:latest
 
-# Install sqlite runtime libraries and ca-certificates
-RUN apk --no-cache add ca-certificates sqlite-libs
+# Install sqlite runtime libraries, ca-certificates, and wget for healthchecks
+RUN apk --no-cache add ca-certificates sqlite-libs wget
 
 WORKDIR /app
 
