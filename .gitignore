@@ -1,0 +1,13 @@
+blossom-server
+ipfs-data/
+blossom-data/
+blossom.db
+*.db
+*.log
+*.log.*
+*.log.*.*
+*.log.*.*.*
+*.log.*.*.*.*
+*.log.*.*.*.*.*
+*.log.*.*.*.*.*.*
+*.exe
