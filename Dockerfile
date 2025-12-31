@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build the application with CGO enabled
-RUN CGO_ENABLED=1 GOOS=linux go build -o blossom-server main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -o blossom-server .
 
 # Runtime stage
 FROM alpine:latest
@@ -34,4 +34,3 @@ EXPOSE 3334
 
 # Run the server
 CMD ["./blossom-server"]
-

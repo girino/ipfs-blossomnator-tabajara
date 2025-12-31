@@ -117,10 +117,10 @@ func main() {
 	// Wrap the relay with middleware to modify blossom responses
 	handler := modifyBlossomResponse(relay, sqlDB, ipfsGatewayURL)
 
-	// Add healthcheck endpoint
+	// Add healthcheck endpoint and home page
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthCheckHandler(sqlDB, ipfsShell, maxMemoryMB, maxGoroutines))
-	mux.Handle("/", handler)
+	mux.HandleFunc("/", homePageHandler(sqlDB, ipfsShell, maxMemoryMB, maxGoroutines, ipfsGatewayURL, handler))
 
 	log.Printf("Running blossom server on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
@@ -644,4 +644,128 @@ func healthCheckHandler(db *sql.DB, ipfsShell *shell.Shell, maxMemoryMB int, max
 		w.WriteHeader(statusCode)
 		json.NewEncoder(w).Encode(response)
 	}
+}
+
+// homePageHandler returns a home page handler that displays usage and health information
+func homePageHandler(db *sql.DB, ipfsShell *shell.Shell, maxMemoryMB int, maxGoroutines int, gatewayURL string, mainHandler http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Only serve home page for root path
+		if r.URL.Path != "/" {
+			mainHandler.ServeHTTP(w, r)
+			return
+		}
+
+		// Get health information
+		status := "healthy"
+		checks := make(map[string]interface{})
+
+		// Check database connectivity
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := db.PingContext(ctx); err != nil {
+			status = "unhealthy"
+			checks["database"] = map[string]interface{}{
+				"status": "unhealthy",
+				"error":  err.Error(),
+			}
+		} else {
+			checks["database"] = map[string]interface{}{
+				"status": "healthy",
+			}
+		}
+
+		// Check IPFS connectivity
+		if ipfsShell != nil {
+			if ipfsShell.IsUp() {
+				checks["ipfs"] = map[string]interface{}{
+					"status": "healthy",
+				}
+			} else {
+				status = "unhealthy"
+				checks["ipfs"] = map[string]interface{}{
+					"status": "unhealthy",
+					"error":  "IPFS API is not accessible",
+				}
+			}
+		}
+
+		// Get memory stats
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		allocMB := int(m.Alloc / 1024 / 1024)
+		memoryStatus := "healthy"
+		if maxMemoryMB > 0 && allocMB > maxMemoryMB {
+			status = "unhealthy"
+			memoryStatus = "unhealthy"
+		}
+		checks["memory"] = map[string]interface{}{
+			"status":         memoryStatus,
+			"alloc_mb":       allocMB,
+			"total_alloc_mb": m.TotalAlloc / 1024 / 1024,
+			"sys_mb":         m.Sys / 1024 / 1024,
+			"num_gc":         m.NumGC,
+			"max_mb":         maxMemoryMB,
+		}
+
+		// Get goroutine count
+		goroutineCount := runtime.NumGoroutine()
+		goroutineStatus := "healthy"
+		if maxGoroutines > 0 && goroutineCount > maxGoroutines {
+			status = "unhealthy"
+			goroutineStatus = "unhealthy"
+		}
+		checks["goroutines"] = map[string]interface{}{
+			"status": goroutineStatus,
+			"count":  goroutineCount,
+			"max":    maxGoroutines,
+		}
+
+		// Get server URL
+		serverURL := fmt.Sprintf("http://%s", r.Host)
+
+		// Generate HTML using template
+		html := fmt.Sprintf(homepageTemplate,
+			status, strings.Title(status),
+			getStatusDisplay(checks["database"]),
+			getStatusMessage(checks["database"]),
+			getStatusDisplay(checks["ipfs"]),
+			getStatusMessage(checks["ipfs"]),
+			checks["memory"].(map[string]interface{})["alloc_mb"],
+			getStatusDisplay(checks["memory"]),
+			checks["memory"].(map[string]interface{})["max_mb"],
+			checks["goroutines"].(map[string]interface{})["count"],
+			getStatusDisplay(checks["goroutines"]),
+			checks["goroutines"].(map[string]interface{})["max"],
+			serverURL,
+			serverURL,
+			gatewayURL,
+			gatewayURL,
+			serverURL)
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(html))
+	}
+}
+
+// Helper functions for status display
+func getStatusDisplay(check interface{}) string {
+	if checkMap, ok := check.(map[string]interface{}); ok {
+		if status, ok := checkMap["status"].(string); ok {
+			return strings.Title(status)
+		}
+	}
+	return "Unknown"
+}
+
+func getStatusMessage(check interface{}) string {
+	if checkMap, ok := check.(map[string]interface{}); ok {
+		if errorMsg, ok := checkMap["error"].(string); ok {
+			return errorMsg
+		}
+		if status, ok := checkMap["status"].(string); ok {
+			return strings.Title(status)
+		}
+	}
+	return "Unknown"
 }
