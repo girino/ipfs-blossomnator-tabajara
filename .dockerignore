@@ -1,0 +1,10 @@
+blossom-data/
+ipfs-data/
+blossom.db
+*.db
+blossom-server
+.git
+.gitignore
+README.md
+*.md
+

@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: blossom-ipfs
+    ports:
+      - "4001:4001"  # Swarm
+      - "5001:5001"  # API
+      - "8080:8080"  # Gateway
+    volumes:
+      - ./ipfs-data:/data/ipfs
+    environment:
+      - IPFS_PROFILE=server
+    healthcheck:
+      test: ["CMD", "ipfs", "swarm", "peers"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  blossom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blossom-server
+    ports:
+      - "${PORT:-3334}:${PORT:-3334}"
+    volumes:
+      - ./blossom-data:/app/data
+    environment:
+      - IPFS_API_URL=http://ipfs:5001
+      - PORT=${PORT:-3334}
+      - DATABASE_PATH=/app/data/blossom.db
+    depends_on:
+      ipfs:
+        condition: service_healthy
+    restart: unless-stopped
+
