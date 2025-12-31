@@ -11,3 +11,4 @@ blossom.db
 *.log.*.*.*.*.*
 *.log.*.*.*.*.*.*
 *.exe
+docker-compose.yml
