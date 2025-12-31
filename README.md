@@ -386,21 +386,6 @@ Images are tagged with:
 docker pull ghcr.io/girino/ipfs-blossomnator-tabajara:v1.0.0
 ```
 
-### Creating Releases
-
-To create a new release:
-
-1. Create and push a semantic version tag:
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-2. GitHub Actions will automatically:
-   - Build Docker images for linux/amd64 and linux/arm64
-   - Push images to GitHub Container Registry
-   - Create a GitHub Release with release notes
-
 ## Troubleshooting
 
 ### IPFS Connection Issues
@@ -425,7 +410,7 @@ If the port is already in use:
 
 ## License
 
-[Add your license here]
+This project is licensed under [Girino's Anarchist License (GAL)](https://license.girino.org).
 
 ## Contributing
 
