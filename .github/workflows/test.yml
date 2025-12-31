@@ -36,7 +36,7 @@ jobs:
         run: go test -v ./...
 
       - name: Build
-        run: go build -o blossom-server main.go
+        run: go build -o blossom-server .
 
       - name: Verify binary
         run: |
