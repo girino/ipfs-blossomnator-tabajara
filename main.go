@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +48,20 @@ func main() {
 	// Ensure it ends with /
 	if !strings.HasSuffix(ipfsGatewayURL, "/") {
 		ipfsGatewayURL += "/"
+	}
+
+	// Read healthcheck thresholds from environment
+	maxMemoryMB := 0
+	if maxMemStr := os.Getenv("HEALTHCHECK_MAX_MEMORY_MB"); maxMemStr != "" {
+		if val, err := strconv.Atoi(maxMemStr); err == nil {
+			maxMemoryMB = val
+		}
+	}
+	maxGoroutines := 0
+	if maxGoroutinesStr := os.Getenv("HEALTHCHECK_MAX_GOROUTINES"); maxGoroutinesStr != "" {
+		if val, err := strconv.Atoi(maxGoroutinesStr); err == nil {
+			maxGoroutines = val
+		}
 	}
 
 	// Initialize SQLite3 backend for event storage
@@ -104,7 +119,7 @@ func main() {
 
 	// Add healthcheck endpoint
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", healthCheckHandler(sqlDB, ipfsShell))
+	mux.HandleFunc("/health", healthCheckHandler(sqlDB, ipfsShell, maxMemoryMB, maxGoroutines))
 	mux.Handle("/", handler)
 
 	log.Printf("Running blossom server on :%s", port)
@@ -542,7 +557,7 @@ func min(a, b int) int {
 }
 
 // healthCheckHandler returns a health check endpoint handler
-func healthCheckHandler(db *sql.DB, ipfsShell *shell.Shell) http.HandlerFunc {
+func healthCheckHandler(db *sql.DB, ipfsShell *shell.Shell, maxMemoryMB int, maxGoroutines int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		status := "healthy"
 		statusCode := http.StatusOK
@@ -583,15 +598,41 @@ func healthCheckHandler(db *sql.DB, ipfsShell *shell.Shell) http.HandlerFunc {
 		// Get memory stats
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
+		allocMB := int(m.Alloc / 1024 / 1024)
+		memoryStatus := "healthy"
+		if maxMemoryMB > 0 && allocMB > maxMemoryMB {
+			status = "unhealthy"
+			statusCode = http.StatusServiceUnavailable
+			memoryStatus = "unhealthy"
+		}
 		checks["memory"] = map[string]interface{}{
-			"alloc_mb":       m.Alloc / 1024 / 1024,
+			"status":         memoryStatus,
+			"alloc_mb":       allocMB,
 			"total_alloc_mb": m.TotalAlloc / 1024 / 1024,
 			"sys_mb":         m.Sys / 1024 / 1024,
 			"num_gc":         m.NumGC,
+			"max_mb":         maxMemoryMB,
+		}
+		if maxMemoryMB > 0 && allocMB > maxMemoryMB {
+			checks["memory"].(map[string]interface{})["error"] = fmt.Sprintf("Memory usage %d MB exceeds threshold %d MB", allocMB, maxMemoryMB)
 		}
 
 		// Get goroutine count
-		checks["goroutines"] = runtime.NumGoroutine()
+		goroutineCount := runtime.NumGoroutine()
+		goroutineStatus := "healthy"
+		if maxGoroutines > 0 && goroutineCount > maxGoroutines {
+			status = "unhealthy"
+			statusCode = http.StatusServiceUnavailable
+			goroutineStatus = "unhealthy"
+		}
+		checks["goroutines"] = map[string]interface{}{
+			"status": goroutineStatus,
+			"count":  goroutineCount,
+			"max":    maxGoroutines,
+		}
+		if maxGoroutines > 0 && goroutineCount > maxGoroutines {
+			checks["goroutines"].(map[string]interface{})["error"] = fmt.Sprintf("Goroutine count %d exceeds threshold %d", goroutineCount, maxGoroutines)
+		}
 
 		response := map[string]interface{}{
 			"status":    status,

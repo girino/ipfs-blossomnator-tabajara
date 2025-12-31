@@ -40,6 +40,8 @@ services:
       - PORT=${PORT:-3334}
       - DATABASE_PATH=/app/data/blossom.db
       - IPFS_GATEWAY_URL=${IPFS_GATEWAY_URL:-https://dweb.link/ipfs/}
+      - HEALTHCHECK_MAX_MEMORY_MB=${HEALTHCHECK_MAX_MEMORY_MB:-512}
+      - HEALTHCHECK_MAX_GOROUTINES=${HEALTHCHECK_MAX_GOROUTINES:-1000}
     depends_on:
       ipfs:
         condition: service_healthy

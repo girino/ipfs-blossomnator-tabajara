@@ -104,11 +104,15 @@ docker-compose down
 The server includes a `/health` endpoint that reports:
 - **Database connectivity**: Checks SQLite database access
 - **IPFS connectivity**: Verifies IPFS API is accessible
-- **Memory usage**: Reports allocated, total allocated, and system memory
-- **Goroutines**: Current number of goroutines
+- **Memory usage**: Reports allocated, total allocated, and system memory, with threshold checking
+- **Goroutines**: Current number of goroutines, with threshold checking
 - **GC stats**: Garbage collection statistics
 
-Example health check response:
+The healthcheck will mark the service as unhealthy if:
+- Memory usage exceeds `HEALTHCHECK_MAX_MEMORY_MB` (default: 512 MB)
+- Goroutine count exceeds `HEALTHCHECK_MAX_GOROUTINES` (default: 1000)
+
+Example health check response (healthy):
 ```json
 {
   "status": "healthy",
@@ -116,12 +120,42 @@ Example health check response:
     "database": {"status": "healthy"},
     "ipfs": {"status": "healthy"},
     "memory": {
+      "status": "healthy",
       "alloc_mb": 15,
       "total_alloc_mb": 25,
       "sys_mb": 50,
-      "num_gc": 2
+      "num_gc": 2,
+      "max_mb": 512
     },
-    "goroutines": 12,
+    "goroutines": {
+      "status": "healthy",
+      "count": 12,
+      "max": 1000
+    },
+    "timestamp": 1704067200
+  }
+}
+```
+
+Example health check response (unhealthy due to thresholds):
+```json
+{
+  "status": "unhealthy",
+  "checks": {
+    "database": {"status": "healthy"},
+    "ipfs": {"status": "healthy"},
+    "memory": {
+      "status": "unhealthy",
+      "alloc_mb": 600,
+      "max_mb": 512,
+      "error": "Memory usage 600 MB exceeds threshold 512 MB"
+    },
+    "goroutines": {
+      "status": "unhealthy",
+      "count": 1500,
+      "max": 1000,
+      "error": "Goroutine count 1500 exceeds threshold 1000"
+    },
     "timestamp": 1704067200
   }
 }
@@ -187,6 +221,8 @@ export IPFS_GATEWAY_URL=https://dweb.link/ipfs/
 | `PORT` | No | `3334` | Server port to listen on |
 | `DATABASE_PATH` | No | `./blossom.db` | Path to SQLite database file |
 | `IPFS_GATEWAY_URL` | No | `https://dweb.link/ipfs/` | Public IPFS gateway URL for redirects |
+| `HEALTHCHECK_MAX_MEMORY_MB` | No | `512` | Maximum memory usage in MB before marking unhealthy |
+| `HEALTHCHECK_MAX_GOROUTINES` | No | `1000` | Maximum number of goroutines before marking unhealthy |
 
 ### IPFS Setup
 
