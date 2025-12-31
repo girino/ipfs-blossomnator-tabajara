@@ -33,6 +33,7 @@ services:
       - IPFS_API_URL=http://ipfs:5001
       - PORT=${PORT:-3334}
       - DATABASE_PATH=/app/data/blossom.db
+      - IPFS_GATEWAY_URL=${IPFS_GATEWAY_URL:-https://dweb.link/ipfs/}
     depends_on:
       ipfs:
         condition: service_healthy
