@@ -109,6 +109,39 @@ func main() {
 // modifyBlossomResponse wraps the relay to intercept and modify blossom JSON responses
 func modifyBlossomResponse(relay http.Handler, db *sql.DB, gatewayURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if this is a GET request to a blob URL (pattern: /sha256.ext)
+		if r.Method == "GET" {
+			path := strings.TrimPrefix(r.URL.Path, "/")
+
+			// Check if path looks like a blob (has a dot, suggesting a file extension)
+			if strings.Contains(path, ".") {
+				// Extract SHA256 (everything before the last dot)
+				lastDot := strings.LastIndex(path, ".")
+				if lastDot > 0 {
+					sha256 := path[:lastDot]
+					ext := path[lastDot:]
+
+					// SHA256 should be 64 hex characters
+					if len(sha256) == 64 {
+						// Look up CID from database
+						var ipfsCID string
+						query := `SELECT ipfs_cid FROM ipfs_blossom_mapping WHERE sha256 = ?`
+						err := db.QueryRow(query, sha256).Scan(&ipfsCID)
+						if err == nil && ipfsCID != "" {
+							// Build gateway URL with filename
+							filename := "file" + ext
+							gatewayURLWithFile := gatewayURL + ipfsCID + "?filename=" + url.QueryEscape(filename)
+
+							// Redirect to IPFS gateway
+							log.Printf("DEBUG: Redirecting blob request sha256=%s to IPFS gateway: %s", sha256, gatewayURLWithFile)
+							http.Redirect(w, r, gatewayURLWithFile, http.StatusFound)
+							return
+						}
+					}
+				}
+			}
+		}
+
 		// Use a response writer that captures the response
 		capturedWriter := &responseCapturer{
 			ResponseWriter: w,
