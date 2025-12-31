@@ -1,6 +1,6 @@
 # IPFS Blossomnator Tabajara
 
-A [Blossom](https://github.com/fiatjaf/khatru/blob/master/examples/blossom/main.go) server implementation that stores blob files in IPFS while maintaining compatibility with the Blossom protocol. This server uses SQLite3 for event storage and automatically redirects blob requests to IPFS gateway URLs.
+A Blossom server implementation built using [Khatru](https://github.com/fiatjaf/khatru), a flexible Nostr relay framework. This server stores blob files in IPFS while maintaining full compatibility with the Blossom protocol. Built on Khatru, it uses SQLite3 for event storage and automatically redirects blob requests to IPFS gateway URLs.
 
 ## Features
 
@@ -25,7 +25,7 @@ The easiest way to run IPFS Blossomnator Tabajara is using Docker Compose, which
 - `docker-compose.prod.yml` - Production setup with healthchecks and auto-restart
 - `docker-compose.dev.yml` - Development setup (simpler, no healthchecks)
 
-**You must copy one of these files to `docker-compose.yml` before running.** The repository includes a base `docker-compose.yml` file, but it's recommended to use one of the specialized files.
+**You must copy one of these files to `docker-compose.yml` before running.**
 
 **Before running, choose one of the following:**
 
@@ -277,6 +277,13 @@ https://dweb.link/ipfs/Qm...?filename=file.jpg
 ```
 
 ## Architecture
+
+This implementation is built on [Khatru](https://github.com/fiatjaf/khatru), a flexible and extensible Nostr relay framework written in Go. Khatru provides the core relay functionality, while this project extends it with:
+
+- **Blossom Extension**: Uses Khatru's Blossom extension for blob storage
+- **IPFS Backend**: Custom storage handlers that integrate with IPFS
+- **SQLite3 Event Store**: Uses `github.com/fiatjaf/eventstore/sqlite3` for event persistence
+- **Response Modification**: Middleware to enhance responses with IPFS gateway URLs
 
 ```
 ┌─────────────┐
