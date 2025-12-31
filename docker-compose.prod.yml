@@ -29,7 +29,7 @@ services:
       dockerfile: Dockerfile
     # Option 2: Use pre-built image from GitHub Container Registry
     # Uncomment the image line and comment out the build section to use a released version
-    # image: ghcr.io/YOUR_USERNAME/ipfs-blossomnator-tabajara:v1.0.0
+    # image: ghcr.io/girino/ipfs-blossomnator-tabajara:v1.0.0
     container_name: blossom-server
     ports:
       - "${PORT:-3334}:${PORT:-3334}"

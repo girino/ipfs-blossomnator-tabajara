@@ -366,12 +366,11 @@ services:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    image: ghcr.io/YOUR_USERNAME/ipfs-blossomnator-tabajara:v1.0.0
+    image: ghcr.io/girino/ipfs-blossomnator-tabajara:v1.0.0
     container_name: blossom-server
     # ... rest of configuration
 ```
 
-Replace `YOUR_USERNAME` with your GitHub username or organization name.
 
 ### Available Tags
 
@@ -384,7 +383,7 @@ Images are tagged with:
 ### Pulling Images Manually
 
 ```bash
-docker pull ghcr.io/YOUR_USERNAME/ipfs-blossomnator-tabajara:v1.0.0
+docker pull ghcr.io/girino/ipfs-blossomnator-tabajara:v1.0.0
 ```
 
 ### Creating Releases
