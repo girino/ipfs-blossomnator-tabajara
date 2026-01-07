@@ -8,6 +8,7 @@ A Blossom server implementation built using [Khatru](https://github.com/fiatjaf/
 - **SQLite3 Storage**: Uses SQLite3 for event storage and metadata mapping
 - **Automatic Redirects**: Blob GET requests automatically redirect to IPFS gateway URLs
 - **Enhanced JSON Responses**: Upload and list responses include IPFS CID and gateway URLs
+- **Upload Authorization**: Optional pubkey whitelist to restrict uploads to authorized users
 - **Docker Support**: Fully containerized with Docker Compose for easy deployment
 
 ## Quick Start with Docker (Recommended)
@@ -174,6 +175,9 @@ export PORT=8080
 # Set custom IPFS gateway URL (default: https://dweb.link/ipfs/)
 export IPFS_GATEWAY_URL=https://ipfs.io/ipfs/
 
+# Set allowed pubkeys for upload authorization (comma-separated, npub or hex format)
+export ALLOWED_PUBKEYS="npub1abc...,npub2def...,0123456789abcdef..."
+
 # Start with custom settings
 docker-compose up -d
 ```
@@ -221,6 +225,7 @@ export IPFS_GATEWAY_URL=https://dweb.link/ipfs/
 | `PORT` | No | `3334` | Server port to listen on |
 | `DATABASE_PATH` | No | `./blossom.db` | Path to SQLite database file |
 | `IPFS_GATEWAY_URL` | No | `https://dweb.link/ipfs/` | Public IPFS gateway URL for redirects |
+| `ALLOWED_PUBKEYS` | No | - | Comma-separated list of allowed pubkeys for uploads (npub or hex format). If not set, uploads are unrestricted. Downloads are always unrestricted. |
 | `HEALTHCHECK_MAX_MEMORY_MB` | No | `512` | Maximum memory usage in MB before marking unhealthy |
 | `HEALTHCHECK_MAX_GOROUTINES` | No | `1000` | Maximum number of goroutines before marking unhealthy |
 
@@ -233,6 +238,49 @@ If you're running IPFS locally, make sure:
 3. The IPFS node is properly initialized
 
 For Docker Compose, the IPFS node is automatically configured.
+
+## Upload Authorization
+
+The server supports optional upload authorization via a pubkey whitelist. When `ALLOWED_PUBKEYS` is set, only authenticated users with pubkeys in the whitelist can upload blobs. Downloads are always unrestricted.
+
+### Setting Up Authorization
+
+1. **Get your pubkey** (in npub or hex format):
+   - npub format: `npub1abc...` (Bech32 encoded)
+   - hex format: `0123456789abcdef...` (64 hex characters)
+
+2. **Set the whitelist** via environment variable:
+   ```bash
+   export ALLOWED_PUBKEYS="npub1abc...,npub2def...,0123456789abcdef..."
+   ```
+
+   Or in `docker-compose.yml`:
+   ```yaml
+   environment:
+     ALLOWED_PUBKEYS: "npub1abc...,npub2def..."
+   ```
+
+3. **Restart the server** to apply changes.
+
+### How It Works
+
+- **Uploads**: When `ALLOWED_PUBKEYS` is set, uploads require NIP-98 HTTP authentication, and the pubkey from the auth event must be in the whitelist. Unauthorized uploads return HTTP 403.
+- **Downloads**: Downloads are always unrestricted and do not require authentication.
+- **Format Support**: The whitelist accepts both npub (Bech32) and hex formats. All keys are normalized to hex for comparison.
+
+### Example
+
+```bash
+# Allow only specific pubkeys to upload
+export ALLOWED_PUBKEYS="npub1abc123...,npub1def456..."
+
+# Start server
+./blossom-server
+
+# Uploads from whitelisted pubkeys: ✅ Allowed
+# Uploads from other pubkeys: ❌ Rejected (403 Forbidden)
+# Downloads: ✅ Always allowed (no auth required)
+```
 
 ## API Usage
 

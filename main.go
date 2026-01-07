@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -21,6 +22,8 @@ import (
 	"github.com/fiatjaf/khatru/blossom"
 	shell "github.com/ipfs/go-ipfs-api"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 func main() {
@@ -62,6 +65,17 @@ func main() {
 		if val, err := strconv.Atoi(maxGoroutinesStr); err == nil {
 			maxGoroutines = val
 		}
+	}
+
+	// Parse pubkey whitelist from environment
+	allowedPubkeys, err := parsePubkeyWhitelist(os.Getenv("ALLOWED_PUBKEYS"))
+	if err != nil {
+		log.Fatalf("Failed to parse ALLOWED_PUBKEYS: %v", err)
+	}
+	if len(allowedPubkeys) > 0 {
+		log.Printf("Pubkey whitelist enabled with %d allowed keys", len(allowedPubkeys))
+	} else {
+		log.Printf("No pubkey whitelist configured - authentication not required")
 	}
 
 	// Initialize SQLite3 backend for event storage
@@ -113,6 +127,16 @@ func main() {
 	bl.LoadBlob = append(bl.LoadBlob, func(ctx context.Context, sha256 string, ext string) (io.ReadSeeker, error) {
 		return loadBlobFromIPFS(ctx, ipfsShell, sqlDB, sha256, ext)
 	})
+
+	// Set up RejectUpload hook for whitelist authentication (uploads only)
+	if len(allowedPubkeys) > 0 {
+		bl.RejectUpload = append(bl.RejectUpload, func(ctx context.Context, auth *nostr.Event, size int, ext string) (bool, string, int) {
+			if err := checkPubkeyAuthFromEvent(auth, allowedPubkeys); err != nil {
+				return true, err.Error(), http.StatusForbidden
+			}
+			return false, "", 0
+		})
+	}
 
 	// Wrap the relay with middleware to modify blossom responses
 	handler := modifyBlossomResponse(relay, sqlDB, ipfsGatewayURL)
@@ -554,6 +578,95 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// parsePubkeyWhitelist parses a comma-separated list of pubkeys from environment variable
+// Supports both npub (bech32) and hex formats
+func parsePubkeyWhitelist(whitelistStr string) (map[string]bool, error) {
+	if whitelistStr == "" {
+		return nil, nil
+	}
+
+	whitelist := make(map[string]bool)
+	keys := strings.Split(whitelistStr, ",")
+
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+
+		// Normalize the key to hex format
+		normalized, err := normalizePubkey(key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to normalize pubkey %q: %w", key, err)
+		}
+
+		whitelist[normalized] = true
+		log.Printf("Added pubkey to whitelist: %s (normalized: %s)", key, normalized)
+	}
+
+	return whitelist, nil
+}
+
+// normalizePubkey converts a pubkey from npub format to hex, or returns hex as-is
+func normalizePubkey(pubkey string) (string, error) {
+	pubkey = strings.TrimSpace(pubkey)
+
+	// If it's already hex format (64 hex characters), return as-is
+	if len(pubkey) == 64 {
+		// Validate it's actually hex
+		for _, c := range pubkey {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				return "", fmt.Errorf("invalid hex pubkey: %s", pubkey)
+			}
+		}
+		return strings.ToLower(pubkey), nil
+	}
+
+	// If it starts with npub, decode it
+	if strings.HasPrefix(pubkey, "npub") {
+		_, value, err := nip19.Decode(pubkey)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode npub: %w", err)
+		}
+
+		// The decoded value should be a hex string
+		hexPubkey, ok := value.(string)
+		if !ok {
+			return "", fmt.Errorf("decoded npub is not a string")
+		}
+
+		return strings.ToLower(hexPubkey), nil
+	}
+
+	return "", fmt.Errorf("pubkey must be in hex (64 chars) or npub format, got: %s", pubkey)
+}
+
+// checkPubkeyAuthFromEvent verifies that the pubkey from the auth event is in the whitelist
+func checkPubkeyAuthFromEvent(auth *nostr.Event, allowedPubkeys map[string]bool) error {
+	if auth == nil {
+		return errors.New("authentication required but no auth event provided")
+	}
+
+	// Get pubkey from the auth event
+	pubkey := auth.PubKey
+	if pubkey == "" {
+		return errors.New("authentication required but no pubkey found in auth event")
+	}
+
+	// Normalize the authenticated pubkey to hex format
+	normalizedPubkey, err := normalizePubkey(pubkey)
+	if err != nil {
+		return fmt.Errorf("failed to normalize authenticated pubkey: %w", err)
+	}
+
+	// Check if the normalized pubkey is in the whitelist
+	if !allowedPubkeys[normalizedPubkey] {
+		return fmt.Errorf("pubkey %s is not in the allowed whitelist", normalizedPubkey)
+	}
+
+	return nil
 }
 
 // healthCheckHandler returns a health check endpoint handler
