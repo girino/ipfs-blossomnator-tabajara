@@ -178,6 +178,9 @@ export IPFS_GATEWAY_URL=https://ipfs.io/ipfs/
 # Set allowed pubkeys for upload authorization (comma-separated, npub or hex format)
 export ALLOWED_PUBKEYS="npub1abc...,npub2def...,0123456789abcdef..."
 
+# Set max results per list/query (default: 10000)
+export QUERY_LIMIT=5000
+
 # Start with custom settings
 docker-compose up -d
 ```
@@ -226,6 +229,7 @@ export IPFS_GATEWAY_URL=https://dweb.link/ipfs/
 | `DATABASE_PATH` | No | `./blossom.db` | Path to SQLite database file |
 | `IPFS_GATEWAY_URL` | No | `https://dweb.link/ipfs/` | Public IPFS gateway URL for redirects |
 | `ALLOWED_PUBKEYS` | No | - | Comma-separated list of allowed pubkeys for uploads (npub or hex format). If not set, uploads are unrestricted. Downloads are always unrestricted. |
+| `QUERY_LIMIT` | No | `10000` | Maximum number of results returned per list/query. Eventstore default is 100. |
 | `HEALTHCHECK_MAX_MEMORY_MB` | No | `512` | Maximum memory usage in MB before marking unhealthy |
 | `HEALTHCHECK_MAX_GOROUTINES` | No | `1000` | Maximum number of goroutines before marking unhealthy |
 

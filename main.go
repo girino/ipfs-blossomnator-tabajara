@@ -67,6 +67,14 @@ func main() {
 		}
 	}
 
+	// Query limit for list/query results (eventstore default is 100)
+	queryLimit := 10000
+	if qlStr := os.Getenv("QUERY_LIMIT"); qlStr != "" {
+		if val, err := strconv.Atoi(qlStr); err == nil && val > 0 {
+			queryLimit = val
+		}
+	}
+
 	// Parse pubkey whitelist from environment
 	allowedPubkeys, err := parsePubkeyWhitelist(os.Getenv("ALLOWED_PUBKEYS"))
 	if err != nil {
@@ -79,7 +87,7 @@ func main() {
 	}
 
 	// Initialize SQLite3 backend for event storage
-	db := &sqlite3.SQLite3Backend{DatabaseURL: dbPath}
+	db := &sqlite3.SQLite3Backend{DatabaseURL: dbPath, QueryLimit: queryLimit}
 	if err := db.Init(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
